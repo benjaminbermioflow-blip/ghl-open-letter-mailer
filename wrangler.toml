@@ -1,0 +1,10 @@
+name = "ghl-open-letter-mailer"
+main = "src/worker.js"
+compatibility_date = "2026-05-19"
+
+[vars]
+OLC_BASE_URL = "https://api.openletterconnect.com/api/v1"
+GHL_LOCATION_ID = "D2KGPfSizh2vKCFYc9AV"
+TRIGGER_FIELD = "Flow Property Group Template"
+TRIGGER_VALUE = "Flow Property Group Template"
+OLC_TEMPLATE_TITLE = "Flow Mailing Template"

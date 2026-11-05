@@ -1,0 +1,197 @@
+{
+  "name": "GHL Send Mailer to Open Letter Connect",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ghl-send-mailer",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "3f2d4ad1-7d63-4c55-85f9-4ff7c07b5d1a",
+      "name": "GHL Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst sendMailerRaw = body.sendMailer ?? body.send_a_mailer ?? body.customFields?.send_a_mailer;\nconst sendMailer = String(sendMailerRaw ?? '').trim().toLowerCase();\nconst shouldSend = ['yes', 'true', 'selected', 'send', 'send mailer', '1'].includes(sendMailer);\n\nconst required = ['firstName', 'lastName', 'address1', 'city', 'state', 'zip'];\nconst missing = required.filter((field) => !String(body[field] ?? '').trim());\n\nreturn [{\n  json: {\n    shouldSend,\n    missing,\n    contactId: body.contactId,\n    source: 'gohighlevel',\n    openLetterOrder: {\n      contacts: [\n        {\n          firstName: body.firstName,\n          lastName: body.lastName,\n          address1: body.address1,\n          address2: body.address2 || '',\n          companyName: body.companyName || '',\n          city: body.city,\n          state: body.state,\n          zip: body.zip,\n          phone: body.phone || '',\n          email: body.email || '',\n          propertyAddress: body.propertyAddress || body.address1,\n          propertyCity: body.propertyCity || body.city,\n          propertyState: body.propertyState || body.state,\n          propertyZip: body.propertyZip || body.zip,\n          campaign_phone: body.campaignPhone || '',\n          meta_data: {\n            ghl_contact_id: body.contactId || '',\n            source: 'gohighlevel'\n          }\n        }\n      ],\n      productId: Number($vars.OLC_PRODUCT_ID),\n      templateId: Number($vars.OLC_TEMPLATE_ID),\n      name: `GHL mailer - ${body.firstName || ''} ${body.lastName || ''}`.trim(),\n      returnAddress: {\n        firstName: $vars.RETURN_FIRST_NAME,\n        lastName: $vars.RETURN_LAST_NAME,\n        companyName: $vars.RETURN_COMPANY_NAME,\n        address1: $vars.RETURN_ADDRESS_1,\n        address2: $vars.RETURN_ADDRESS_2 || '',\n        city: $vars.RETURN_CITY,\n        state: $vars.RETURN_STATE,\n        zip: $vars.RETURN_ZIP,\n        phoneNo: $vars.RETURN_PHONE || '',\n        email: $vars.RETURN_EMAIL || ''\n      },\n      crmMode: 'zapier'\n    }\n  }\n}];"
+      },
+      "id": "97c4f56b-7734-4c25-a804-bb6390f3d23a",
+      "name": "Build Open Letter Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "c5d537dc-e856-43c9-a1ee-dd13df80364f",
+              "leftValue": "={{ $json.shouldSend }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "89883f10-3fe6-486a-a3df-8d38fbc49f5c",
+              "leftValue": "={{ $json.missing.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f3fa4da4-e507-439b-b852-dcb6d6db1b56",
+      "name": "Ready to Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openletterconnect.com/api/v1/orders",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openLetterOrder) }}",
+        "options": {}
+      },
+      "id": "70e8fda8-ac2b-423d-b624-804704a04c10",
+      "name": "Create Open Letter Order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        120,
+        -100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_N8N_CREDENTIAL_ID",
+          "name": "Open Letter Connect Bearer Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, openLetter: $json } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "7be044d5-a47d-4277-bb77-66103a19ae17",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: false, reason: $json.shouldSend ? 'Missing required mailing address fields' : 'Send mailer field was not selected', missing: $json.missing } }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "5f3d5f75-5a89-4053-b105-d44902fd1de2",
+      "name": "Respond Skipped",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        120,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "GHL Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Open Letter Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Open Letter Order": {
+      "main": [
+        [
+          {
+            "node": "Ready to Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready to Send?": {
+      "main": [
+        [
+          {
+            "node": "Create Open Letter Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Open Letter Order": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-05-18T00:00:00.000Z",
+  "versionId": "template"
+}
